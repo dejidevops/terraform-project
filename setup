@@ -1,0 +1,160 @@
+resource "aws_route_table" "rt-app1" {
+   count = lenght (var.aws_route_table)
+    vpc_id = aws_vpc.main.id
+
+    route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.gw.id
+  }
+
+  tags = {
+    Name = "rt-app1"
+  }
+}
+
+
+resource "aws_route_table" "rt-app2" {
+    vpc_id = aws_vpc.main.id
+
+    route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.gw.id
+  }
+
+  tags = {
+    Name = "rt-app2"
+  }
+}
+
+
+resource "aws_route_table_association" "app1" {
+  subnet_id      = aws_subnet.app1.id
+  route_table_id = aws_route_table.rt-app1.id
+}
+
+
+resource "aws_route_table_association" "app2" {
+  subnet_id      = aws_subnet.app2.id
+  route_table_id = aws_route_table.rt-app2.id
+}
+
+
+resource "aws_lb_target_group" "dev" {
+  name     = "devtrain"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.main.id
+  target_type = "instance"
+}
+
+
+resource "aws_instance" "app1" {
+  ami           = "ami-0505148b3591e4c07"
+  instance_type = "t2.micro"
+  subnet_id = aws_subnet.app1.id
+  key_name = "London"
+  vpc_security_group_ids = [aws_security_group.allow_tls.id]
+  user_data = filebase64("bootstrap.sh")
+
+  tags = {
+    Name = "app1"
+  }
+}
+
+resource "aws_instance" "app2" {
+  ami           = "ami-0505148b3591e4c07"
+  instance_type = "t2.micro"
+  subnet_id = aws_subnet.app2.id
+  key_name = "London"
+  vpc_security_group_ids = [aws_security_group.allow_tls.id]
+  user_data = filebase64("bootstrap.sh")
+
+  tags = {
+    Name = "app2"
+  }
+}
+
+resource "aws_security_group" "allow_tls" {
+  name        = "allow_tls"
+  description = "Allow TLS inbound traffic"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    description      = "TLS from public"
+    from_port        = 443
+    to_port          = 443
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description      = "NON-TLS from public"
+    from_port        = 80
+    to_port          = 80
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description      = "ssh traffic for Administrator"
+    from_port        = 22
+    to_port          = 22
+    protocol         = "tcp"
+    cidr_blocks      = ["80.193.62.172/32"]
+  }
+
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "allow_tls"
+  }
+}
+
+
+
+
+
+
+resource "aws_instance" "instance" {
+  count = 2
+  instance_type = "t2.micro"
+  
+  ami           = "ami-0505148b3591e4c07"
+  subnet_id= element(aws_subnet.public-subnets.*.id, count.index)
+  key_name = "London"
+  vpc_security_group_ids = [aws_security_group.allow_tls.id]
+  user_data = filebase64("bootstrap.sh")
+
+  tags = {
+    Name = "aws_instance"
+  }
+}
+
+
+
+
+
+set_identifier = "primary"
+    failover_routing_policy {
+      type = "PRIMARY"
+    }
+
+    health_check_id =aws_route53_health_check.alb_health_check.id
+
+
+
+
+
+    resource "aws_route53_health_check" "alb_health_check" {
+    fqdn             = aws_lb.main.dns_name
+    port             = 443
+    type             = "HTTPS"
+    resource_path      = "/" # or your health check endpoint
+    failure_threshold = "3" 
+    request_interval = "30"
+}
