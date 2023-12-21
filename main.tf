@@ -39,7 +39,6 @@ resource "aws_subnet" "private-subnets" {
         Name = element(var.private_subnets, count.index)
 
     }
-
 }
 
 resource aws_route_table "public_route_table" {
@@ -79,6 +78,24 @@ resource "aws_route_table_association" "main2" {
   subnet_id      = element(aws_subnet.private-subnets.*.id, count.index)
   route_table_id = element(aws_route_table.private_route_table.*.id, count.index)
 }
+
+resource "aws_nat_gateway" "natgw" {
+  count = length(var.private_subnets)
+  subnet_id = element(aws_subnet.public-subnets.*.id, count.index)
+  allocation_id = element(aws_eip.nat-gw.*.id, count.index)
+
+  tags = {
+    Name =  "private-natgateway-${count.index}"
+  }
+
+  depends_on = [aws_internet_gateway.gw]
+}
+
+resource "aws_eip" "nat-gw" {
+  count = 2 #lenght(var.private_subnets)
+  vpc = true
+}
+   
 
 resource "aws_lb_target_group" "dev" {
   name     = "devtrain"
@@ -132,7 +149,7 @@ resource "aws_launch_template" "launch_tmp" {
     image_id = "ami-0505148b3591e4c07"
     instance_type = "t2.micro"
     vpc_security_group_ids = [aws_security_group.allow_tls.id]
-    key_name = "London"
+    key_name = "DevOps-Key"
     user_data = filebase64("bootstrap.sh")
 
 }
@@ -171,15 +188,15 @@ resource "aws_lb_listener" "front_end" {
 }
 
 data "aws_route53_zone" "public" {
-    name = "senistone.co.uk"
+    name = "firsttechconsultants.co.uk"
     private_zone = false
 }
 
 
 resource "aws_acm_certificate" "cert" {
-    domain_name = "*.senistone.co.uk"
+    domain_name = "*.firsttechconsultants.co.uk"
     validation_method = "DNS"
-    subject_alternative_names = ["deji.senistone.co.uk"]
+    subject_alternative_names = ["deji.firsttechconsultants.co.uk"]
 
     lifecycle {
          create_before_destroy = true
@@ -193,7 +210,7 @@ resource "aws_route53_record" "validation" {
         name = x.resource_record_name
         record = x.resource_record_value
         type = x.resource_record_type
-        zone_id = x.domain_name == "senistone.co.uk" ? data.aws_route53_zone.public.zone_id : data.aws_route53_zone.public.zone_id
+        zone_id = x.domain_name == "firsttechconsultants.co.uk" ? data.aws_route53_zone.public.zone_id : data.aws_route53_zone.public.zone_id
         }
     }
     allow_overwrite = true 
@@ -201,15 +218,15 @@ resource "aws_route53_record" "validation" {
     records = [each.value.record]
     ttl = 300
     type = each.value.type
-    zone_id = "Z05942591BBZANTS6XK8U"
+    zone_id = "Z0128271FTR80TWSFUX3"
 
 }
 
 
 
 resource "aws_route53_record" "www" {
-    zone_id = "Z05942591BBZANTS6XK8U"
-    name = "deji.senistone.co.uk"
+    zone_id = "Z0128271FTR80TWSFUX3"
+    name = "deji.firsttechconsultants.co.uk"
     type = "A"
 
     alias {
@@ -226,7 +243,7 @@ resource "aws_launch_template" "main" {
     image_id = "ami-0505148b3591e4c07"
     instance_type = "t2.micro"
     vpc_security_group_ids = [aws_security_group.allow_tls.id]
-    key_name = "London"
+    key_name = "DevOps-Key"
     user_data = filebase64("bootstrap.sh")
 }
 
